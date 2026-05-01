@@ -59,3 +59,10 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+
+import http from 'http';
+
+const HTTP_PORT = process.env.HTTP_PORT || 3001;
+http.createServer(app).listen(HTTP_PORT, () => {
+  console.log(`Plain HTTP listening on port ${HTTP_PORT}`);
+});
