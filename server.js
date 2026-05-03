@@ -36,28 +36,25 @@ await pool.query(`
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+const OFFLINE_THRESHOLD_MS = 90_000; // missed 1.5 minutes
+
 app.post('/ping', async (req, res) => {
-  const { id, status, csv } = req.body;
+  const { id, status, avg, raining } = req.body;
   if (!KNOWN_DEVICES.includes(id)) {
     return res.status(401).json({ error: 'Unknown device' });
   }
 
-  devices[id] = { status, lastSeen: Date.now() };
+  // Both ping and alert update lastSeen and status
+  const currentStatus = raining !== undefined ? raining : status;
+  devices[id] = { status: currentStatus, lastSeen: Date.now() };
 
-  if (csv) {
-    const lines = csv
-      .trim()
-      .split('\\n')
-      .filter((l) => l.length > 0);
-    for (const line of lines) {
-      const [t_ms, air_temp, air_hum, sound_v, rain_prob, raining] =
-        line.split(',');
-      await pool.query(
-        `INSERT INTO measurements (device_id, t_ms, air_temp, air_hum, sound_v, rain_prob, raining)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, t_ms, air_temp, air_hum, sound_v, rain_prob, raining],
-      );
-    }
+  // Only a full ping (with avg) writes to the database
+  if (avg) {
+    await pool.query(
+      `INSERT INTO measurements (device_id, air_temp, air_hum, sound_v, rain_prob, raining)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, avg.temp, avg.hum, avg.sound, avg.rainProb, currentStatus ? 1 : 0],
+    );
   }
 
   res.json({ ok: true });

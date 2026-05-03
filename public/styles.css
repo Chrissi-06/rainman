@@ -67,3 +67,20 @@ canvas {
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
     width: 100% !important;
 }
+
+.chart-wrapper {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    max-height: 500px;
+    margin-bottom: 24px;
+}
+
+.chart-wrapper canvas {
+    background: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    max-height: 460px !important;
+}
