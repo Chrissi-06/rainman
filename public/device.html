@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Device Data</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<p><a href="/">← Back</a></p>
+<h1 id="deviceTitle"></h1>
+
+<div class="controls">
+    Show last:
+    <select id="minutes" onchange="loadData()">
+        <option value="10">10 minutes</option>
+        <option value="60" selected>1 hour</option>
+        <option value="360">6 hours</option>
+        <option value="1440">24 hours</option>
+    </select>
+</div>
+
+<canvas id="tempHumChart"></canvas>
+<canvas id="soundChart"></canvas>
+<canvas id="rainChart"></canvas>
+
+<script>
+    const SOUND_SCALE = 100 / 3.3;
+    const deviceId = window.location.pathname.split('/').pop();
+    document.getElementById('deviceTitle').textContent = deviceId;
+
+    let tempHumChart, soundChart, rainChart;
+
+    function initCharts() {
+        const commonOptions = {
+            animation: false,
+            scales: { x: { ticks: { maxTicksLimit: 10 } } }
+        };
+
+        tempHumChart = new Chart(document.getElementById('tempHumChart'), {
+            type: 'line',
+            data: { labels: [], datasets: [
+                    { label: 'Temperature (°C)', data: [], borderColor: '#e74c3c', tension: 0.2, pointRadius: 0 },
+                    { label: 'Humidity (%)',      data: [], borderColor: '#3498db', tension: 0.2, pointRadius: 0 }
+                ]},
+            options: { ...commonOptions, plugins: { title: { display: true, text: 'Temperature & Humidity' } } }
+        });
+
+        soundChart = new Chart(document.getElementById('soundChart'), {
+            type: 'line',
+            data: { labels: [], datasets: [
+                    { label: 'Sound (scaled 0–100)', data: [], borderColor: '#9b59b6', tension: 0.2, pointRadius: 0 }
+                ]},
+            options: { ...commonOptions, plugins: { title: { display: true, text: 'Sound Level' } } }
+        });
+
+        rainChart = new Chart(document.getElementById('rainChart'), {
+            type: 'line',
+            data: { labels: [], datasets: [
+                    { label: 'Rain Probability (%)', data: [], borderColor: '#2ecc71', tension: 0.2, pointRadius: 0 }
+                ]},
+            options: { ...commonOptions, plugins: { title: { display: true, text: 'Rain Probability' } } }
+        });
+    }
+
+    async function loadData() {
+        const minutes = document.getElementById('minutes').value;
+        const res = await fetch(`/api/data/${deviceId}?minutes=${minutes}`);
+        const rows = await res.json();
+
+        const labels = rows.map(r => new Date(r.recorded_at).toLocaleTimeString());
+
+        tempHumChart.data.labels = labels;
+        tempHumChart.data.datasets[0].data = rows.map(r => r.air_temp);
+        tempHumChart.data.datasets[1].data = rows.map(r => r.air_hum);
+        tempHumChart.update();
+
+        soundChart.data.labels = labels;
+        soundChart.data.datasets[0].data = rows.map(r => (r.sound_v * SOUND_SCALE).toFixed(1));
+        soundChart.update();
+
+        rainChart.data.labels = labels;
+        rainChart.data.datasets[0].data = rows.map(r => r.rain_prob);
+        rainChart.update();
+    }
+
+    initCharts();
+    loadData();
+    setInterval(loadData, 10000);
+</script>
+</body>
+</html>

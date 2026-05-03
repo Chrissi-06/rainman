@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Device Status</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<h1>Device Status</h1>
+<table id="deviceTable">
+  <thead><tr><th>Device</th><th>Raining</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  async function loadDevices() {
+    const res = await fetch('/api/devices');
+    const devices = await res.json();
+    const tbody = document.querySelector('#deviceTable tbody');
+    tbody.innerHTML = devices.map(d => `
+        <tr>
+          <td><a href="/device/${d.id}">${d.id}</a></td>
+          <td class="status ${d.status === 'offline' ? 'offline' : d.status === 'true' ? 'raining' : 'clear'}">
+            ${d.status}
+          </td>
+        </tr>
+      `).join('');
+  }
+
+  loadDevices();
+  setInterval(loadDevices, 10000);
+</script>
+</body>
+</html>
