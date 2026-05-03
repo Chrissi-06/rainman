@@ -20,8 +20,7 @@
     </select>
 </div>
 
-<canvas id="tempHumChart"></canvas>
-<canvas id="soundChart"></canvas>
+<canvas id="mainChart"></canvas>
 <canvas id="rainChart"></canvas>
 
 <script>
@@ -29,7 +28,16 @@
     const deviceId = window.location.pathname.split('/').pop();
     document.getElementById('deviceTitle').textContent = deviceId;
 
-    let tempHumChart, soundChart, rainChart;
+    let mainChart, rainChart;
+
+    function calcAxisRange(values, hardMin = 0, hardMax = 100) {
+        const dataMin = Math.min(...values);
+        const dataMax = Math.max(...values);
+        return {
+            min: Math.min(hardMin, Math.floor(dataMin) - 2),
+            max: Math.max(hardMax, Math.ceil(dataMax) + 2)
+        };
+    }
 
     function initCharts() {
         const commonOptions = {
@@ -37,21 +45,21 @@
             scales: { x: { ticks: { maxTicksLimit: 10 } } }
         };
 
-        tempHumChart = new Chart(document.getElementById('tempHumChart'), {
+        mainChart = new Chart(document.getElementById('mainChart'), {
             type: 'line',
             data: { labels: [], datasets: [
                     { label: 'Temperature (°C)', data: [], borderColor: '#e74c3c', tension: 0.2, pointRadius: 0 },
-                    { label: 'Humidity (%)',      data: [], borderColor: '#3498db', tension: 0.2, pointRadius: 0 }
+                    { label: 'Humidity (%)',      data: [], borderColor: '#3498db', tension: 0.2, pointRadius: 0 },
+                    { label: 'Sound Level',      data: [], borderColor: '#9b59b6', tension: 0.2, pointRadius: 0 }
                 ]},
-            options: { ...commonOptions, plugins: { title: { display: true, text: 'Temperature & Humidity' } } }
-        });
-
-        soundChart = new Chart(document.getElementById('soundChart'), {
-            type: 'line',
-            data: { labels: [], datasets: [
-                    { label: 'Sound (scaled 0–100)', data: [], borderColor: '#9b59b6', tension: 0.2, pointRadius: 0 }
-                ]},
-            options: { ...commonOptions, plugins: { title: { display: true, text: 'Sound Level' } } }
+            options: {
+                ...commonOptions,
+                plugins: { title: { display: true, text: 'Temperature, Humidity & Sound Level' } },
+                scales: {
+                    x: { ticks: { maxTicksLimit: 10 } },
+                    y: { min: 0, max: 100 }
+                }
+            }
         });
 
         rainChart = new Chart(document.getElementById('rainChart'), {
@@ -59,7 +67,14 @@
             data: { labels: [], datasets: [
                     { label: 'Rain Probability (%)', data: [], borderColor: '#2ecc71', tension: 0.2, pointRadius: 0 }
                 ]},
-            options: { ...commonOptions, plugins: { title: { display: true, text: 'Rain Probability' } } }
+            options: {
+                ...commonOptions,
+                plugins: { title: { display: true, text: 'Rain Probability' } },
+                scales: {
+                    x: { ticks: { maxTicksLimit: 10 } },
+                    y: { min: 0, max: 100 }
+                }
+            }
         });
     }
 
@@ -69,18 +84,29 @@
         const rows = await res.json();
 
         const labels = rows.map(r => new Date(r.recorded_at).toLocaleTimeString());
+        const temps  = rows.map(r => r.air_temp);
+        const hums   = rows.map(r => r.air_hum);
+        const sounds = rows.map(r => parseFloat((r.sound_v * SOUND_SCALE).toFixed(1)));
+        const rain   = rows.map(r => r.rain_prob);
 
-        tempHumChart.data.labels = labels;
-        tempHumChart.data.datasets[0].data = rows.map(r => r.air_temp);
-        tempHumChart.data.datasets[1].data = rows.map(r => r.air_hum);
-        tempHumChart.update();
+        // Calculate y-axis range: default 0-100, widen only if data goes outside
+        const allMainValues = [...temps, ...hums, ...sounds];
+        const { min: mainMin, max: mainMax } = calcAxisRange(allMainValues);
+        mainChart.options.scales.y.min = mainMin;
+        mainChart.options.scales.y.max = mainMax;
 
-        soundChart.data.labels = labels;
-        soundChart.data.datasets[0].data = rows.map(r => (r.sound_v * SOUND_SCALE).toFixed(1));
-        soundChart.update();
+        mainChart.data.labels = labels;
+        mainChart.data.datasets[0].data = temps;
+        mainChart.data.datasets[1].data = hums;
+        mainChart.data.datasets[2].data = sounds;
+        mainChart.update();
+
+        const { min: rainMin, max: rainMax } = calcAxisRange(rain);
+        rainChart.options.scales.y.min = rainMin;
+        rainChart.options.scales.y.max = rainMax;
 
         rainChart.data.labels = labels;
-        rainChart.data.datasets[0].data = rows.map(r => r.rain_prob);
+        rainChart.data.datasets[0].data = rain;
         rainChart.update();
     }
 
