@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const OFFLINE_THRESHOLD_MS = 30_000;
+const OFFLINE_THRESHOLD_MS = 90_000;
 const KNOWN_DEVICES = ['arduino-a', 'arduino-b', 'arduino-c'];
 const devices = {};
 
@@ -35,8 +35,6 @@ await pool.query(`
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-
-const OFFLINE_THRESHOLD_MS = 90_000; // missed 1.5 minutes
 
 app.post('/ping', async (req, res) => {
   const { id, status, avg, raining } = req.body;
