@@ -21,10 +21,10 @@
   <div class="controls">
     Show last:
     <select id="minutes" onchange="loadData()">
-      <option value="10">10 minutes</option>
-      <option value="60" selected>1 hour</option>
-      <option value="360">6 hours</option>
-      <option value="1440">24 hours</option>
+      <option value="10">10 Minuten</option>
+      <option value="60" selected>1 Stunde</option>
+      <option value="360">6 Stunden</option>
+      <option value="1440">24 Stunden</option>
     </select>
   </div>
 
@@ -81,11 +81,11 @@
       data: {
         labels: [],
         datasets: [
-          { label: 'Temperature (°C)',     data: [], borderColor: '#e74c3c', tension: 0.2, pointRadius: 0 },
-          { label: 'Humidity (%)',          data: [], borderColor: '#3498db', tension: 0.2, pointRadius: 0 },
-          { label: 'Sound Level',          data: [], borderColor: '#9b59b6', tension: 0.2, pointRadius: 0 },
-          { label: 'Rain Probability (%)', data: [], borderColor: '#27ae60', tension: 0.2, pointRadius: 0 },
-          { label: 'Raining',              data: [], hidden: true, pointRadius: 0 }
+          { label: 'Temperatur (°C)', data: [], borderColor: '#e74c3c', tension: 0.2, pointRadius: 0 },
+          { label: 'Luftfeuchte (%)', data: [], borderColor: '#3498db', tension: 0.2, pointRadius: 0 },
+          { label: 'relativer Geräuschpegel', data: [], borderColor: '#9b59b6', tension: 0.2, pointRadius: 0 },
+          { label: 'Regensicherheit (%)', data: [], borderColor: '#27ae60', tension: 0.2, pointRadius: 0 },
+          { label: 'Regen', data: [], hidden: true, pointRadius: 0 }
         ]
       },
       options: {
