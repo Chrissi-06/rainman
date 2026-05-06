@@ -108,9 +108,9 @@
     const d = devices.find(d => d.id === DEVICE_ID);
     if (!d) return;
     const bar = document.getElementById('statusBar');
-    bar.textContent = d.status === 'offline' ? 'Offline'
-            : d.status === 'true'    ? '🌧 Raining'
-                    : '☀️ Not raining';
+    bar.textContent = d.status === 'offline' ? 'Rainman macht gerade Pause...'
+            : d.status === 'true'    ? 'Es regnet!'
+                    : 'Es ist trocken.';
     bar.className = 'status-bar ' + (d.status === 'offline' ? 'offline'
             : d.status === 'true'    ? 'raining' : 'clear');
   }
