@@ -37,21 +37,26 @@ app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/ping', async (req, res) => {
-  const { id, status, avg, raining } = req.body;
+  const { id, status, avg, alert } = req.body;
   if (!KNOWN_DEVICES.includes(id)) {
     return res.status(401).json({ error: 'Unknown device' });
   }
 
-  // Both ping and alert update lastSeen and status
-  const currentStatus = raining !== undefined ? raining : status;
-  devices[id] = { status: currentStatus, lastSeen: Date.now() };
+  devices[id] = { status, lastSeen: Date.now() };
 
-  // Only a full ping (with avg) writes to the database
   if (avg) {
     await pool.query(
-      `INSERT INTO measurements (device_id, air_temp, air_hum, sound_v, rain_prob, raining)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, avg.temp, avg.hum, avg.sound, avg.rainProb, currentStatus ? 1 : 0],
+      `INSERT INTO measurements (device_id, air_temp, air_hum, sound_v, rain_prob, raining, alert)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        id,
+        avg.temp,
+        avg.hum,
+        avg.sound,
+        avg.rainProb,
+        status ? 1 : 0,
+        alert ? true : false,
+      ],
     );
   }
 

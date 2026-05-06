@@ -2,33 +2,154 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Device Status</title>
+  <title>Rainman</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-<h1>Device Status</h1>
-<table id="deviceTable">
-  <thead><tr><th>Device</th><th>Raining</th></tr></thead>
-  <tbody></tbody>
-</table>
+
+<div class="page">
+
+  <div class="hero">
+    <img src="Rainman.png" alt="Rainman" class="hero-img">
+  </div>
+
+  <h1>Rainman</h1>
+
+  <div class="status-bar" id="statusBar">Loading...</div>
+
+  <div class="controls">
+    Show last:
+    <select id="minutes" onchange="loadData()">
+      <option value="10">10 minutes</option>
+      <option value="60" selected>1 hour</option>
+      <option value="360">6 hours</option>
+      <option value="1440">24 hours</option>
+    </select>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas id="mainChart"></canvas>
+  </div>
+
+</div>
 
 <script>
-  async function loadDevices() {
-    const res = await fetch('/api/devices');
-    const devices = await res.json();
-    const tbody = document.querySelector('#deviceTable tbody');
-    tbody.innerHTML = devices.map(d => `
-        <tr>
-          <td><a href="/device/${d.id}">${d.id}</a></td>
-          <td class="status ${d.status === 'offline' ? 'offline' : d.status === 'true' ? 'raining' : 'clear'}">
-            ${d.status}
-          </td>
-        </tr>
-      `).join('');
+  const DEVICE_ID = 'arduino-a';
+  const SOUND_SCALE = 100 / 3.3;
+
+  let mainChart;
+
+  const rainShadingPlugin = {
+    id: 'rainShading',
+    beforeDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      const xScale = scales.x;
+      const rainingData = chart.data.datasets[4].data;
+      if (!rainingData.length) return;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(100, 180, 255, 0.18)';
+
+      let inRain = false;
+      let rainStart = null;
+
+      for (let i = 0; i < rainingData.length; i++) {
+        const isRaining = rainingData[i] === 1;
+        if (isRaining && !inRain) {
+          rainStart = xScale.getPixelForValue(i);
+          inRain = true;
+        } else if (!isRaining && inRain) {
+          ctx.fillRect(rainStart, chartArea.top, xScale.getPixelForValue(i) - rainStart, chartArea.height);
+          inRain = false;
+        }
+      }
+      if (inRain) {
+        ctx.fillRect(rainStart, chartArea.top, xScale.getPixelForValue(rainingData.length - 1) - rainStart, chartArea.height);
+      }
+      ctx.restore();
+    }
+  };
+
+  function calcMin(values) { return Math.min(0, Math.floor(Math.min(...values)) - 2); }
+  function calcMax(values) { return Math.max(100, Math.ceil(Math.max(...values)) + 2); }
+
+  function initChart() {
+    mainChart = new Chart(document.getElementById('mainChart'), {
+      type: 'line',
+      plugins: [rainShadingPlugin],
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Temperature (°C)',     data: [], borderColor: '#e74c3c', tension: 0.2, pointRadius: 0 },
+          { label: 'Humidity (%)',          data: [], borderColor: '#3498db', tension: 0.2, pointRadius: 0 },
+          { label: 'Sound Level',          data: [], borderColor: '#9b59b6', tension: 0.2, pointRadius: 0 },
+          { label: 'Rain Probability (%)', data: [], borderColor: '#27ae60', tension: 0.2, pointRadius: 0 },
+          { label: 'Raining',              data: [], hidden: true, pointRadius: 0 }
+        ]
+      },
+      options: {
+        animation: false,
+        plugins: {
+          title: { display: false },
+          legend: { labels: { filter: item => item.text !== 'Raining' } }
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 10 } },
+          y: { min: 0, max: 100 }
+        }
+      }
+    });
   }
 
-  loadDevices();
-  setInterval(loadDevices, 10000);
+  async function loadStatus() {
+    const res = await fetch('/api/devices');
+    const devices = await res.json();
+    const d = devices.find(d => d.id === DEVICE_ID);
+    if (!d) return;
+    const bar = document.getElementById('statusBar');
+    bar.textContent = d.status === 'offline' ? 'Offline'
+            : d.status === 'true'    ? '🌧 Raining'
+                    : '☀️ Not raining';
+    bar.className = 'status-bar ' + (d.status === 'offline' ? 'offline'
+            : d.status === 'true'    ? 'raining' : 'clear');
+  }
+
+  async function loadData() {
+    const minutes = document.getElementById('minutes').value;
+    const res = await fetch(`/api/data/${DEVICE_ID}?minutes=${minutes}`);
+    const rows = await res.json();
+
+    const labels  = rows.map(r => new Date(r.recorded_at).toLocaleTimeString());
+    const temps   = rows.map(r => r.air_temp);
+    const hums    = rows.map(r => r.air_hum);
+    const sounds  = rows.map(r => parseFloat((r.sound_v * SOUND_SCALE).toFixed(1)));
+    const rain    = rows.map(r => r.rain_prob);
+    const raining = rows.map(r => r.raining);
+
+    const all = [...temps, ...hums, ...sounds, ...rain];
+    if (all.length) {
+      mainChart.options.scales.y.min = calcMin(all);
+      mainChart.options.scales.y.max = calcMax(all);
+    }
+
+    mainChart.data.labels = labels;
+    mainChart.data.datasets[0].data = temps;
+    mainChart.data.datasets[1].data = hums;
+    mainChart.data.datasets[2].data = sounds;
+    mainChart.data.datasets[3].data = rain;
+    mainChart.data.datasets[4].data = raining;
+    mainChart.update();
+  }
+
+  async function refresh() {
+    await loadStatus();
+    await loadData();
+  }
+
+  initChart();
+  refresh();
+  setInterval(refresh, 10000);
 </script>
 </body>
 </html>

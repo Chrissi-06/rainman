@@ -2,85 +2,76 @@
 
 body {
     font-family: sans-serif;
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 0 20px;
-    background: #f5f5f5;
+    background: #f0f4f8;
     color: #333;
+    min-height: 100vh;
 }
 
-h1 {
+.page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 32px 60px;
+}
+
+.hero {
+    display: flex;
+    justify-content: center;
     margin-bottom: 24px;
 }
 
-a {
-    color: #3498db;
-    text-decoration: none;
+.hero-img {
+    width: 429px;
+    height: 221px;
+    object-fit: cover;
+    border-radius: 16px;
+    background: #dde3ea;
 }
 
-a:hover {
-    text-decoration: underline;
+h1 {
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 16px;
+    color: #222;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-}
-
-th, td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #eee;
-    text-align: left;
-}
-
-th {
-    background: #fafafa;
+.status-bar {
+    text-align: center;
+    font-size: 1.1rem;
     font-weight: 600;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    background: #e0e0e0;
 }
-
-.status { font-weight: bold; }
-.status.offline { color: #999; }
-.status.raining { color: #e74c3c; }
-.status.clear   { color: #2ecc71; }
+.status-bar.raining { background: #d0eaff; color: #1a6fa8; }
+.status-bar.clear   { background: #d4f5e2; color: #1a7a45; }
+.status-bar.offline { background: #eee;    color: #999;    }
 
 .controls {
-    margin: 20px 0;
-    font-size: 14px;
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    color: #555;
 }
 
 .controls select {
     margin-left: 8px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid #ddd;
-}
-
-canvas {
-    background: white;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 24px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    width: 100% !important;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 0.95rem;
 }
 
 .chart-wrapper {
     background: white;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    max-height: 500px;
-    margin-bottom: 24px;
+    border-radius: 12px;
+    padding: 24px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-.chart-wrapper canvas {
-    background: none;
-    border-radius: 0;
-    padding: 0;
-    box-shadow: none;
-    max-height: 460px !important;
+canvas {
+    max-height: 420px !important;
 }
+
+a { color: #3498db; text-decoration: none; }
+a:hover { text-decoration: underline; }
