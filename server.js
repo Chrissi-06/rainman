@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import express from 'express';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'pg';
@@ -17,7 +19,7 @@ const HOST = process.env.HOST || '127.0.0.1';
 
 const OFFLINE_THRESHOLD_MS = 90_000;
 const MAX_HISTORY_MINUTES = 1440;
-const MAX_BODY_SIZE = '100kb';
+const MAX_BODY_SIZE = '16kb';
 
 const KNOWN_DEVICES = ['arduino-a', 'arduino-b', 'arduino-c'];
 const devices = {};
@@ -57,6 +59,14 @@ await pool.query(`
   ON measurements (device_id, recorded_at)
 `);
 
+app.set('trust proxy', 'loopback');
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  }),
+);
+
 app.use(express.json({ limit: MAX_BODY_SIZE }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -88,8 +98,18 @@ function authenticateUpdate(req, res, next) {
     return res.status(401).json({ error: 'Invalid authentication' });
   }
 
+  req.deviceId = req.body?.id;
   next();
 }
+
+const pingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.deviceId || req.ip,
+  message: { error: 'Too many update requests' },
+});
 
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value);
@@ -100,7 +120,7 @@ function isBoolean(value) {
 }
 
 function validatePingPayload(body) {
-  if (!body || typeof body !== 'object') {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return 'Request body must be an object';
   }
 
@@ -122,13 +142,11 @@ function validatePingPayload(body) {
     return null;
   }
 
-  if (typeof avg !== 'object') {
+  if (typeof avg !== 'object' || Array.isArray(avg)) {
     return 'avg must be an object';
   }
 
-  const fields = ['temp', 'hum', 'sound', 'rainProb'];
-
-  for (const field of fields) {
+  for (const field of ['temp', 'hum', 'sound', 'rainProb']) {
     if (!isFiniteNumber(avg[field])) {
       return `avg.${field} must be a finite number`;
     }
@@ -145,7 +163,7 @@ function validatePingPayload(body) {
   return null;
 }
 
-app.post('/ping', authenticateUpdate, async (req, res) => {
+app.post('/ping', authenticateUpdate, pingLimiter, async (req, res) => {
   const validationError = validatePingPayload(req.body);
 
   if (validationError) {
@@ -183,6 +201,7 @@ app.get('/api/devices', (req, res) => {
 
   const result = KNOWN_DEVICES.map((id) => {
     const device = devices[id];
+
     const isOffline = !device || now - device.lastSeen > OFFLINE_THRESHOLD_MS;
 
     return {
