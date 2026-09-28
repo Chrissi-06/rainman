@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import webpush from 'web-push';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -25,10 +26,19 @@ const KNOWN_DEVICES = ['arduino-a', 'arduino-b', 'arduino-c'];
 const devices = {};
 
 const UPDATE_SECRET = process.env.UPDATE_SECRET;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'https://rainman-server.duckdns.org';
 
 if (!UPDATE_SECRET) {
   throw new Error('UPDATE_SECRET is not configured');
 }
+
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  throw new Error('VAPID keys are not configured');
+}
+
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -57,6 +67,16 @@ await pool.query(`
 await pool.query(`
   CREATE INDEX IF NOT EXISTS measurements_device_recorded_at_idx
   ON measurements (device_id, recorded_at)
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id SERIAL PRIMARY KEY,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
 `);
 
 app.set('trust proxy', 'loopback');
@@ -194,6 +214,73 @@ app.post('/ping', authenticateUpdate, pingLimiter, async (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+
+app.get('/api/push/public-key', (req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  const { endpoint, keys } = req.body || {};
+
+  if (
+    typeof endpoint !== 'string' ||
+    !endpoint.startsWith('https://') ||
+    !keys ||
+    typeof keys.p256dh !== 'string' ||
+    typeof keys.auth !== 'string'
+  ) {
+    return res.status(400).json({ error: 'Invalid push subscription' });
+  }
+
+  await pool.query(
+    `INSERT INTO push_subscriptions (endpoint, p256dh, auth)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (endpoint)
+     DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth`,
+    [endpoint, keys.p256dh, keys.auth],
+  );
+
+  res.json({ ok: true });
+});
+
+app.post('/api/push/test', authenticateUpdate, async (req, res) => {
+  const result = await pool.query(
+    'SELECT id, endpoint, p256dh, auth FROM push_subscriptions',
+  );
+
+  const payload = JSON.stringify({
+    title: 'Rainman-Test',
+    body: 'Web Push funktioniert auf diesem Gerät.',
+    url: '/',
+    tag: 'rainman-test',
+  });
+
+  let sent = 0;
+  let removed = 0;
+
+  for (const subscription of result.rows) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+        },
+        payload,
+      );
+      sent++;
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [subscription.id]);
+        removed++;
+      } else {
+        console.error('Push notification failed:', error);
+      }
+    }
+  }
+
+  res.json({ ok: true, sent, removed, total: result.rows.length });
 });
 
 app.get('/api/devices', (req, res) => {
