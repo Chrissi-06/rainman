@@ -183,6 +183,38 @@ function validatePingPayload(body) {
   return null;
 }
 
+
+async function sendRainAlert() {
+  const result = await pool.query(
+    'SELECT id, endpoint, p256dh, auth FROM push_subscriptions',
+  );
+
+  const payload = JSON.stringify({
+    title: 'Rainman: Regen erkannt',
+    body: 'Es wurde Regen erkannt. Prüfe die Rainman-Anzeige.',
+    url: '/',
+    tag: 'rain-alert',
+  });
+
+  for (const subscription of result.rows) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+        },
+        payload,
+      );
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [subscription.id]);
+      } else {
+        console.error('Rain alert push failed:', error);
+      }
+    }
+  }
+}
+
 app.post('/ping', authenticateUpdate, pingLimiter, async (req, res) => {
   const validationError = validatePingPayload(req.body);
 
@@ -192,9 +224,12 @@ app.post('/ping', authenticateUpdate, pingLimiter, async (req, res) => {
 
   const { id, status, avg, alert } = req.body;
 
+  const wasAlerting = devices[id]?.alert === true;
+
   devices[id] = {
     status,
     lastSeen: Date.now(),
+    alert,
   };
 
   if (avg) {
@@ -211,6 +246,10 @@ app.post('/ping', authenticateUpdate, pingLimiter, async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [id, avg.temp, avg.hum, avg.sound, avg.rainProb, status ? 1 : 0, alert],
     );
+  }
+
+  if (alert && !wasAlerting) {
+    await sendRainAlert();
   }
 
   res.json({ ok: true });
